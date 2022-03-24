@@ -10,19 +10,22 @@
 #include <assert.h>
 #include <math.h>
 
-#include <SDL2/SDL.h>
-#define GL_GLEXT_PROTOTYPES 1
-#include <SDL2/SDL_opengl.h>
+#include <cstring>
+
+#include <SFML/Graphics.hpp>
+#include <SFML/OpenGL.hpp>
+
+#include <GLES3/gl3.h>
 
 #include <cglm/cglm.h>
 #include <cglm/io.h>
 
+extern "C" {
 #include "shader.h"
 #include "spiral.h"
+}
 
-/* Variables related to SDL window and rendering */
-static SDL_Window       *main_window = NULL;
-static SDL_GLContext    main_opengl_context = NULL;
+static sf::Window* main_window;
 
 static mat4 projection_matrix;
 static mat4 view_matrix;
@@ -36,16 +39,10 @@ static mat4 view_matrix;
 #define NUM_SPIRALS     4
 static spiral rendered_spirals[NUM_SPIRALS];
 
-static SDL_Window *
+static sf::Window *
 get_window (void)
 {
     return main_window;
-}
-
-static SDL_GLContext
-get_gl_context (void)
-{
-    return main_opengl_context;
 }
 
 static void
@@ -98,13 +95,8 @@ at_exit (void)
 
         free_spirals();
 
-        if (get_gl_context()) {
-            SDL_GL_DeleteContext(get_gl_context());
-        }
-
-        SDL_DestroyWindow(get_window());
+        delete main_window;
         main_window = NULL;
-        SDL_Quit();
     }
 }
 
@@ -112,12 +104,12 @@ static void
 set_opengl_attributes (void)
 {
     /* Taken from http://headerphile.com/sdl2/opengl-part-1-sdl-opengl-awesome/ */
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+//    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+//    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+//    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+//    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     /* Synchronize buffer swap with monitor V-Sync */
-    SDL_GL_SetSwapInterval(1);
+//    SDL_GL_SetSwapInterval(1);
 }
 
 static void
@@ -143,7 +135,11 @@ generate_projection_matrix(void)
      * 
      * glm_lookat takes the following vectors: Eye, Center, Up
      */
-    glm_lookat((vec3){0.0f, 1.0f, 3.0f}, (vec3){0, 0.92f, 0}, (vec3){0, 1.0f, 0}, view_matrix);
+    vec3 eye{0.0f, 1.0f, 3.0f};
+    vec3 center{0, 0.92f, 0};
+    vec3 up{0, 1.0f, 0};
+
+    glm_lookat(eye, center, up, view_matrix);
     glm_perspective_default((WINDOW_WIDTH/WINDOW_HEIGHT),  projection_matrix);
 }
 
@@ -151,12 +147,6 @@ static void
 init_opengl (void)
 {
     set_opengl_attributes();
-
-    main_opengl_context = SDL_GL_CreateContext(get_window());
-    if (main_opengl_context == NULL) {
-        ERROR_LOG("SDL_GL_CreateContext failed: %s\n", SDL_GetError());
-        exit(EXIT_FAILURE);
-    }
 
     glEnable(GL_PROGRAM_POINT_SIZE);
     glEnable(GL_POINT_SMOOTH);
@@ -172,10 +162,10 @@ clear_window (void)
     /* Clear both rendering buffers to black */
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    SDL_GL_SwapWindow(get_window());
+    main_window->display();
 
     glClear(GL_COLOR_BUFFER_BIT);
-    SDL_GL_SwapWindow(get_window());
+    main_window->display();
 }
 
 static void
@@ -203,15 +193,16 @@ render_frame (void)
 static void
 run_main_event_loop (void)
 {
-    bool loop = true;
     uint32_t frame_start_ticks = 0;
     uint32_t frame_end_ticks = 0;
     uint32_t frame_delta_ticks = 0;
 
     printf("Entering main loop\n");
 
-    while (loop) {
-        SDL_Event event;
+    sf::Clock clock;
+
+    while (main_window->isOpen()) {
+        sf::Event event;
 
         /* Bump the delta in case the framerate is too fast */
         if (frame_delta_ticks == 0) {
@@ -220,18 +211,18 @@ run_main_event_loop (void)
 
         printf("FPS: %3.3f\r", 1/(frame_delta_ticks*0.001f));
 
-        frame_start_ticks = SDL_GetTicks();
+        frame_start_ticks = clock.getElapsedTime().asMilliseconds();// SDL_GetTicks();
 
         /* Process incoming events.
          * NOTE: This will chew up 100% CPU.
          * Would be nice to have a better way to wait between drawing frames */
-        if (SDL_PollEvent(&event) != 0) {
-            if (event.type == SDL_QUIT) {
-                loop = false;
-            } else if (event.type == SDL_KEYDOWN) {
-                if (event.key.keysym.sym == SDLK_q) {
-                    loop = false;
-                }   
+        while (main_window->pollEvent(event)) {
+            if (event.type == sf::Event::Closed) {
+                main_window->close();
+            } else if (event.type == sf::Event::KeyPressed) {
+                if (event.key.code == sf::Keyboard::Q) {
+                    main_window->close();
+                }
             }
         }
 
@@ -239,9 +230,11 @@ run_main_event_loop (void)
         render_frame();
 
         /* Move the rendered buffer to the screen */
-        SDL_GL_SwapWindow(get_window());
+        main_window->display();
 
-        frame_end_ticks = SDL_GetTicks();
+        sf::sleep(sf::milliseconds(1000/24 - clock.getElapsedTime().asMilliseconds() + frame_start_ticks));
+
+        frame_end_ticks = clock.getElapsedTime().asMilliseconds();// SDL_GetTicks();
         frame_delta_ticks = frame_end_ticks - frame_start_ticks;
     }
 
@@ -249,24 +242,9 @@ run_main_event_loop (void)
 }
 
 static void
-init_sdl (void)
+init_sfml (void)
 {
-    int rc = 0;
-
-    rc = SDL_Init(SDL_INIT_VIDEO);
-    if (rc != 0) {
-        ERROR_LOG("SDL_Init failed (%u): %s\n", rc, SDL_GetError());
-        exit(rc);
-    }
-
-    main_window = SDL_CreateWindow("Christmas Tree",
-                                   SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                                   WINDOW_WIDTH, WINDOW_HEIGHT,
-                                   SDL_WINDOW_OPENGL);
-    if (main_window == NULL) {
-        ERROR_LOG("SDL_CreateWindow failed: %s\n", SDL_GetError());
-        exit(EXIT_FAILURE);
-    }
+    main_window = new sf::RenderWindow(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Christmas Tree");
 }
 
 int
@@ -275,7 +253,7 @@ main (int argc, char *argv[])
     /* Setup program exit cleanup routines */
     atexit(at_exit);
 
-    init_sdl();
+    init_sfml();
     init_opengl();
     generate_projection_matrix();
     initialize_shaders();

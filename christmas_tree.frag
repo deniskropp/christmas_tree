@@ -5,12 +5,12 @@
  * Mike Mallin, 2019 - 2020
  */
 
-#version 150
+#version 140
 
 in vec4 frag_Color;
 out vec4 outColor;
 
-void main (void)
+void main()
 {
     outColor = frag_Color;
 }
