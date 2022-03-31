@@ -234,7 +234,7 @@ run_main_event_loop (void)
 
         sf::sleep(sf::milliseconds(1000/24 - clock.getElapsedTime().asMilliseconds() + frame_start_ticks));
 
-        frame_end_ticks = clock.getElapsedTime().asMilliseconds();// SDL_GetTicks();
+        frame_end_ticks = clock.getElapsedTime().asMilliseconds();
         frame_delta_ticks = frame_end_ticks - frame_start_ticks;
     }
 
