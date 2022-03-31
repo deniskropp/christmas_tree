@@ -101,18 +101,6 @@ at_exit (void)
 }
 
 static void
-set_opengl_attributes (void)
-{
-    /* Taken from http://headerphile.com/sdl2/opengl-part-1-sdl-opengl-awesome/ */
-//    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-//    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-//    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-//    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    /* Synchronize buffer swap with monitor V-Sync */
-//    SDL_GL_SetSwapInterval(1);
-}
-
-static void
 upload_shader_constants (void)
 {
     glUniformMatrix4fv(get_vertex_uniform_projection(),
@@ -146,8 +134,6 @@ generate_projection_matrix(void)
 static void
 init_opengl (void)
 {
-    set_opengl_attributes();
-
     glEnable(GL_PROGRAM_POINT_SIZE);
     glEnable(GL_POINT_SMOOTH);
 
@@ -244,7 +230,14 @@ run_main_event_loop (void)
 static void
 init_sfml (void)
 {
-    main_window = new sf::RenderWindow(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Christmas Tree");
+    sf::ContextSettings settings;
+
+    settings.attributeFlags = sf::ContextSettings::Core;
+    settings.majorVersion = 3;
+    settings.minorVersion = 2;
+
+    main_window = new sf::RenderWindow(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Christmas Tree",
+                                       sf::Style::Titlebar | sf::Style::Close, settings );
 }
 
 int
